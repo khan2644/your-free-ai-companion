@@ -25,6 +25,10 @@ interface BeforeInstallPromptEvent extends Event {
 
 export const Route = createFileRoute("/")({
   head: () => ({
+    links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/favicon.ico" },
+    ],
     meta: [
       { title: "Kova AI — Free AI chat and website builder" },
       { name: "description", content: "A simple free AI chat for everyday questions and a focused workspace for building websites." },
@@ -32,6 +36,7 @@ export const Route = createFileRoute("/")({
       { property: "og:description", content: "Chat with Kova AI or switch to Build when you want to turn an idea into a website." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "theme-color", content: "#0f172a" },
     ],
   }),
   component: KovaWorkspace,
