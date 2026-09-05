@@ -1,95 +1,113 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
-  Activity,
   ArrowUp,
   Bot,
-  Braces,
-  ChevronDown,
-  CirclePlus,
-  Code2,
-  FileCode2,
-  Folder,
-  Globe2,
+  Check,
+  Copy,
   LayoutTemplate,
   Menu,
   MessageSquare,
-  Paperclip,
-  PanelRight,
-  Play,
   Plus,
-  Rocket,
-  Search,
   Settings2,
-  Sparkles,
-  TerminalSquare,
+  UserRound,
   X,
-  Zap,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type Mode = "build" | "chat" | "code";
+type Section = "chat" | "build" | "profile";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
+    links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/favicon.ico" },
+    ],
     meta: [
-      { title: "Kova AI — Build ideas into real apps" },
-      { name: "description", content: "A free AI workspace for chatting, coding, and building real websites with a live preview." },
-      { property: "og:title", content: "Kova AI — Build ideas into real apps" },
-      { property: "og:description", content: "Chat with AI, generate code, and see your website come alive in real time." },
+      { title: "Kova AI — Free AI chat and website builder" },
+      { name: "description", content: "A simple free AI chat for everyday questions and a focused workspace for building websites." },
+      { property: "og:title", content: "Kova AI — Free AI chat and website builder" },
+      { property: "og:description", content: "Chat with Kova AI or switch to Build when you want to turn an idea into a website." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "theme-color", content: "#0f172a" },
     ],
   }),
   component: KovaWorkspace,
 });
 
-const starterMessages: ChatMessage[] = [
-  {
-    role: "user",
-    content: "Build a focused workspace for my new AI product. I want a clean landing page, a prompt input, and a live product preview.",
-  },
-  {
-    role: "assistant",
-    content: "Absolutely. I’ve mapped this into a focused AI workspace with a clear prompt flow, responsive shell, and a live preview surface.\n\n**Ready to build:** landing page, prompt composer, product preview, and responsive layout.",
-  },
-];
-
 function KovaWorkspace() {
-  const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<Mode>("build");
+  const [section, setSection] = useState<Section>("chat");
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
-  const [mobileRail, setMobileRail] = useState(false);
-  const [previewVisible, setPreviewVisible] = useState(true);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isStreaming]);
 
+  useEffect(() => {
+    inputRef.current?.focus();
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handleInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+  }, []);
+
+  function selectSection(nextSection: Section) {
+    setSection(nextSection);
+    setError("");
+    setMobileMenu(false);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function startNewChat() {
+    setMessages([]);
+    setError("");
+    selectSection("chat");
+  }
+
+  async function installApp() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  }
+
   async function sendMessage(text = input) {
     const content = text.trim();
     if (!content || isStreaming) return;
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content }];
+    const nextMessages = [...messages, { role: "user" as const, content }];
     setMessages([...nextMessages, { role: "assistant", content: "" }]);
     setInput("");
     setError("");
     setIsStreaming(true);
+    inputRef.current?.focus();
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages, mode }),
+        body: JSON.stringify({ messages: nextMessages, mode: section === "build" ? "build" : "chat" }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error || "The AI could not answer right now.");
+        throw new Error(body?.error || "Kova could not answer right now.");
       }
-      if (!response.body) throw new Error("The AI response stream was unavailable.");
+      if (!response.body) throw new Error("The AI response was unavailable.");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantText = "";
@@ -105,66 +123,79 @@ function KovaWorkspace() {
       setMessages(nextMessages);
     } finally {
       setIsStreaming(false);
+      inputRef.current?.focus();
     }
   }
 
+  const isProfile = section === "profile";
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
-        <aside className={`${mobileRail ? "flex" : "hidden"} fixed inset-y-0 left-0 z-50 w-72 flex-col border-r border-sidebar-border bg-sidebar p-4 shadow-2xl md:relative md:flex md:w-[230px] md:shadow-none`}>
+        <aside className={`${mobileMenu ? "flex" : "hidden"} fixed inset-y-0 left-0 z-50 w-72 flex-col border-r border-sidebar-border bg-sidebar p-4 shadow-2xl md:relative md:flex md:w-[230px] md:shadow-none`}>
           <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2.5">
-              <div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[0_0_24px_var(--glow)]"><Sparkles size={16} /></div>
-              <div><div className="font-semibold tracking-tight">Kova</div><div className="font-mono text-[10px] text-muted-foreground">AI WORKSPACE</div></div>
-            </div>
-            <button className="text-muted-foreground md:hidden" onClick={() => setMobileRail(false)} aria-label="Close menu"><X size={18} /></button>
+            <button className="flex items-center gap-2.5 text-left" onClick={() => selectSection("chat")} aria-label="Open Kova chat">
+              <img src="/favicon.ico" alt="Kova" className="size-8 rounded-lg" />
+              <span><span className="block font-semibold tracking-tight">Kova</span><span className="block font-mono text-[10px] text-muted-foreground">FREE AI</span></span>
+            </button>
+            <button className="text-muted-foreground md:hidden" onClick={() => setMobileMenu(false)} aria-label="Close menu"><X size={18} /></button>
           </div>
-          <button className="mt-7 flex h-10 items-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110" onClick={() => setMessages([])}><CirclePlus size={17} /> New project</button>
-          <div className="mt-7 flex items-center justify-between px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"><span>Projects</span><Plus size={14} /></div>
-          <nav className="mt-3 space-y-1">
-            <ProjectItem icon={<LayoutTemplate size={15} />} name="Kova landing" active />
-            <ProjectItem icon={<Globe2 size={15} />} name="Portfolio v2" />
-            <ProjectItem icon={<Code2 size={15} />} name="Taskflow app" />
+          <button className="mt-8 flex h-10 items-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110" onClick={startNewChat}><Plus size={17} /> New chat</button>
+          <nav className="mt-8 space-y-1" aria-label="Main menu">
+            <NavItem active={section === "chat"} icon={<MessageSquare size={16} />} label="Chat" onClick={() => selectSection("chat")} />
+            <NavItem active={section === "build"} icon={<LayoutTemplate size={16} />} label="Build a website" onClick={() => selectSection("build")} />
           </nav>
-          <div className="mt-auto space-y-1 border-t border-sidebar-border pt-4">
-            <RailItem icon={<Search size={15} />} label="Search projects" />
-            <RailItem icon={<Settings2 size={15} />} label="Workspace settings" />
-            <div className="mt-4 flex items-center gap-2 rounded-md bg-sidebar-accent p-2.5"><div className="grid size-7 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">ZK</div><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">Zaid Khan</div><div className="text-[10px] text-muted-foreground">Free workspace</div></div><ChevronDown size={14} className="text-muted-foreground" /></div>
+          <div className="mt-auto border-t border-sidebar-border pt-4">
+            <NavItem active={section === "profile"} icon={<UserRound size={16} />} label="Profile" onClick={() => selectSection("profile")} />
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-sidebar-accent p-2.5"><div className="grid size-7 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">ZK</div><div className="min-w-0"><div className="truncate text-xs font-semibold">Zaid Khan</div><div className="text-[10px] text-muted-foreground">Free plan</div></div></div>
           </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:px-6">
-            <div className="flex items-center gap-3"><button className="text-muted-foreground md:hidden" onClick={() => setMobileRail(true)} aria-label="Open menu"><Menu size={19} /></button><div className="hidden h-5 w-px bg-border md:block" /><div><div className="flex items-center gap-2 text-sm font-semibold">Kova landing <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">draft</span></div><div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground"><span className="live-pulse size-1.5 rounded-full bg-success" /> Saved just now</div></div></div>
-            <div className="flex items-center gap-2"><button className="hidden items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-accent sm:flex"><Rocket size={14} /> Publish</button><button className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-accent" aria-label="Activity"><Activity size={16} /></button><button className="grid size-9 place-items-center rounded-md bg-accent text-accent-foreground hover:bg-primary hover:text-primary-foreground" onClick={() => setPreviewVisible(!previewVisible)} aria-label="Toggle preview"><PanelRight size={16} /></button></div>
+          <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:px-7">
+            <div className="flex items-center gap-3"><button className="text-muted-foreground md:hidden" onClick={() => setMobileMenu(true)} aria-label="Open menu"><Menu size={19} /></button><div><div className="flex items-center gap-2 text-sm font-semibold">{section === "chat" ? "Chat" : section === "build" ? "Build a website" : "Profile"}</div><div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground"><span className="live-pulse size-1.5 rounded-full bg-success" /> Ready</div></div></div>
+            <div className="flex items-center gap-2"><span className="hidden rounded-md border border-border px-2.5 py-1.5 font-mono text-[10px] text-muted-foreground sm:inline">FREE</span><button className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-accent" aria-label="Settings"><Settings2 size={16} /></button></div>
           </header>
-          <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border bg-background px-4 md:px-6"><ModeButton active={mode === "build"} icon={<Zap size={14} />} label="Build" onClick={() => setMode("build")} /><ModeButton active={mode === "chat"} icon={<MessageSquare size={14} />} label="Chat" onClick={() => setMode("chat")} /><ModeButton active={mode === "code"} icon={<Braces size={14} />} label="Code" onClick={() => setMode("code")} /><div className="ml-auto font-mono text-[10px] text-muted-foreground">gemini 3.7 flash</div></div>
-              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-10 md:py-8">
+
+          {isProfile ? <ProfilePanel installPrompt={installPrompt} onInstall={installApp} /> : (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-7 md:px-10 md:py-10">
                 <div className="mx-auto max-w-2xl space-y-7">
-                  {messages.length === 0 && <EmptyState onPick={sendMessage} />}
+                  {messages.length === 0 && <EmptyState section={section} onPick={sendMessage} />}
                   {messages.map((message, index) => <Message key={`${index}-${message.role}`} message={message} />)}
                   {isStreaming && messages.at(-1)?.content === "" && <div className="flex items-center gap-2 pl-1 text-xs text-muted-foreground"><span className="live-pulse size-1.5 rounded-full bg-primary" /> Kova is thinking…</div>}
                   {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
                 </div>
               </div>
-              <div className="border-t border-border bg-card/70 p-4 md:px-10 md:py-5"><div className="mx-auto max-w-2xl"><div className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_0_0_1px_var(--glow)] focus-within:border-primary"><textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder={mode === "build" ? "Describe what you want to build…" : mode === "code" ? "Ask for code or a fix…" : "Ask Kova anything…"} rows={2} className="w-full resize-none bg-transparent px-4 pt-3 text-sm text-foreground outline-none placeholder:text-muted-foreground" /><div className="flex items-center justify-between px-3 pb-3 pt-2"><div className="flex items-center gap-1"><button className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent" aria-label="Attach a file"><Paperclip size={16} /></button><button className="hidden rounded-md px-2 py-1 font-mono text-[10px] text-muted-foreground hover:bg-accent sm:block">/ commands</button></div><button disabled={!input.trim() || isStreaming} onClick={() => void sendMessage()} className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><ArrowUp size={17} /></button></div></div><div className="mt-2 flex items-center justify-between px-1 font-mono text-[10px] text-muted-foreground"><span>Free plan · real-time AI</span><span>Shift + Enter for newline</span></div></div></div>
+              <Composer input={input} setInput={setInput} onSend={() => void sendMessage()} isStreaming={isStreaming} section={section} inputRef={inputRef} />
             </div>
-            {previewVisible && <PreviewPanel />}
-          </div>
+          )}
         </section>
       </div>
-      {mobileRail && <button className="fixed inset-0 z-40 bg-background/70 md:hidden" onClick={() => setMobileRail(false)} aria-label="Close navigation overlay" />}
+      {mobileMenu && <button className="fixed inset-0 z-40 bg-background/70 md:hidden" onClick={() => setMobileMenu(false)} aria-label="Close navigation overlay" />}
     </main>
   );
 }
 
-function ProjectItem({ icon, name, active = false }: { icon: React.ReactNode; name: string; active?: boolean }) { return <button className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition ${active ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"}`}><span className={active ? "text-primary" : ""}>{icon}</span>{name}<span className="ml-auto text-[10px] text-muted-foreground">•••</span></button>; }
-function RailItem({ icon, label }: { icon: React.ReactNode; label: string }) { return <button className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground">{icon}{label}</button>; }
-function ModeButton({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition ${active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent/60"}`}>{icon}{label}</button>; }
-function Message({ message }: { message: ChatMessage }) { const isUser = message.role === "user"; return <div className={`flex gap-3 ${isUser ? "justify-end" : ""}`}><div className={`grid size-7 shrink-0 place-items-center rounded-md ${isUser ? "order-2 bg-secondary text-secondary-foreground" : "bg-primary text-primary-foreground"}`}>{isUser ? <span className="text-[10px] font-bold">ZK</span> : <Bot size={15} />}</div><div className={`max-w-[min(100%,590px)] ${isUser ? "order-1" : ""}`}><div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] text-muted-foreground"><span>{isUser ? "You" : "Kova AI"}</span><span>·</span><span>{isUser ? "now" : "assistant"}</span></div><div className={`rounded-lg px-4 py-3 text-sm leading-6 ${isUser ? "bg-primary text-primary-foreground" : "border border-border bg-card text-card-foreground"}`}><ReactMarkdown components={{ p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>, strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>, code: ({ children }) => <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs">{children}</code>, ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5">{children}</ul> }}>{message.content || " "}</ReactMarkdown></div>{!isUser && message.content && <div className="mt-2 flex items-center gap-3 font-mono text-[10px] text-muted-foreground"><span className="flex items-center gap-1 text-success"><span className="size-1.5 rounded-full bg-success" /> complete</span><button className="hover:text-foreground">Copy</button><button className="hover:text-foreground">Regenerate</button></div>}</div></div>; }
-function EmptyState({ onPick }: { onPick: (text: string) => void }) { return <div className="flex min-h-[280px] flex-col items-center justify-center text-center"><div className="mb-4 grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_30px_var(--glow)]"><Sparkles size={21} /></div><h1 className="text-2xl font-semibold tracking-tight">What will you build today?</h1><p className="mt-2 max-w-sm text-sm text-muted-foreground">Describe an idea, ask a question, or drop in a bug. Kova turns it into momentum.</p><div className="mt-7 flex flex-wrap justify-center gap-2"><QuickPrompt text="Build a portfolio site" onClick={onPick} /><QuickPrompt text="Explain a React hook" onClick={onPick} /><QuickPrompt text="Create a SaaS dashboard" onClick={onPick} /></div></div>; }
-function QuickPrompt({ text, onClick }: { text: string; onClick: (text: string) => void }) { return <button onClick={() => onClick(text)} className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground transition hover:border-primary hover:text-foreground">{text}</button>; }
-function PreviewPanel() { return <aside className="flex w-full shrink-0 flex-col border-t border-border bg-sidebar/50 xl:w-[43%] xl:border-l xl:border-t-0"><div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-4"><div className="flex items-center gap-2 text-xs font-semibold"><span className="live-pulse size-1.5 rounded-full bg-success" /> Live preview</div><div className="flex items-center gap-1"><button className="grid size-7 place-items-center rounded text-muted-foreground hover:bg-accent" aria-label="Run preview"><Play size={13} /></button><button className="grid size-7 place-items-center rounded text-muted-foreground hover:bg-accent" aria-label="Open preview"><Globe2 size={14} /></button></div></div><div className="flex items-center gap-2 border-b border-border px-4 py-2 font-mono text-[10px] text-muted-foreground"><span className="size-2 rounded-full bg-destructive/70" /><span className="size-2 rounded-full bg-warning/80" /><span className="size-2 rounded-full bg-success/80" /><div className="ml-2 flex-1 truncate rounded bg-background px-2 py-1">kova-preview.local</div></div><div className="min-h-[370px] flex-1 overflow-hidden p-4 md:p-7"><div className="h-full min-h-[370px] overflow-hidden rounded-lg border border-border bg-background shadow-2xl"><div className="flex items-center justify-between border-b border-border px-4 py-3"><div className="flex items-center gap-2 text-sm font-semibold"><div className="grid size-6 place-items-center rounded bg-primary text-primary-foreground"><Sparkles size={12} /></div>Kova</div><div className="hidden items-center gap-4 text-[10px] text-muted-foreground sm:flex"><span>Product</span><span>Workflows</span><span>Pricing</span><span className="rounded bg-primary px-2 py-1 text-primary-foreground">Start free</span></div><Menu size={15} className="text-muted-foreground sm:hidden" /></div><div className="relative overflow-hidden px-6 pb-8 pt-10 md:px-10 md:pt-16"><div className="pointer-events-none absolute right-[-50px] top-[-40px] size-56 rounded-full border border-primary/20 bg-primary/5 blur-2xl" /><div className="relative max-w-md"><div className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary"><span className="size-1.5 rounded-full bg-primary" /> Build without limits</div><h2 className="text-3xl font-semibold leading-[1.08] tracking-tight md:text-5xl">Ideas into <span className="text-primary">interfaces.</span></h2><p className="mt-4 max-w-sm text-xs leading-5 text-muted-foreground md:text-sm">A calm, capable workspace for the moments when your best product ideas arrive faster than your code.</p><div className="mt-6 flex items-center gap-3"><button className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Start building <ArrowUp size={13} className="ml-1 inline rotate-45" /></button><span className="font-mono text-[10px] text-muted-foreground">No card required</span></div></div><div className="mt-10 grid grid-cols-2 gap-2 md:mt-14 md:grid-cols-3"><PreviewMetric icon={<TerminalSquare size={14} />} value="24/7" label="Available" /><PreviewMetric icon={<FileCode2 size={14} />} value="∞" label="Iterations" /><PreviewMetric icon={<Zap size={14} />} value="Live" label="Preview" /></div></div></div></div><div className="hidden items-center justify-between border-t border-border px-4 py-2 font-mono text-[10px] text-muted-foreground md:flex"><span className="flex items-center gap-1.5"><Folder size={12} /> src / pages / landing</span><span>3 files changed</span></div></aside>; }
-function PreviewMetric({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) { return <div className="rounded-md border border-border bg-card p-3"><div className="mb-4 text-primary">{icon}</div><div className="text-lg font-semibold">{value}</div><div className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div></div>; }
+function NavItem({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
+  return <button onClick={onClick} className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-left text-sm transition ${active ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"}`}><span className={active ? "text-primary" : ""}>{icon}</span>{label}</button>;
+}
+
+function EmptyState({ section, onPick }: { section: Section; onPick: (text: string) => void }) {
+  const build = section === "build";
+  return <div className="flex min-h-[360px] flex-col items-center justify-center text-center"><img src="/favicon.ico" alt="Kova AI" className="mb-5 size-14 rounded-2xl shadow-[0_0_30px_var(--glow)]" /><h1 className="text-3xl font-semibold tracking-tight">{build ? "What will you build?" : "How can I help?"}</h1><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{build ? "Describe a website or app idea and Kova will help you shape it." : "Ask anything, get a clear answer, or start a conversation."}</p><div className="mt-8 flex flex-wrap justify-center gap-2">{(build ? ["Build a portfolio website", "Create a simple landing page"] : ["Explain something to me", "Help me write something", "Give me an idea"]).map((text) => <button key={text} onClick={() => onPick(text)} className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground transition hover:border-primary hover:text-foreground">{text}</button>)}</div></div>;
+}
+
+function Composer({ input, setInput, onSend, isStreaming, section, inputRef }: { input: string; setInput: (value: string) => void; onSend: () => void; isStreaming: boolean; section: Section; inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
+  return <div className="border-t border-border bg-card/70 p-4 md:px-10 md:py-5"><div className="mx-auto max-w-2xl"><div className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_0_0_1px_var(--glow)] focus-within:border-primary"><textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSend(); } }} placeholder={section === "build" ? "Describe what you want to build…" : "Message Kova AI…"} rows={2} className="w-full resize-none bg-transparent px-4 pt-3 text-sm text-foreground outline-none placeholder:text-muted-foreground" /><div className="flex items-center justify-between px-3 pb-3 pt-2"><span className="font-mono text-[10px] text-muted-foreground">Free · real-time AI</span><button disabled={!input.trim() || isStreaming} onClick={onSend} className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><ArrowUp size={17} /></button></div></div><div className="mt-2 text-center font-mono text-[10px] text-muted-foreground">Shift + Enter for a new line</div></div></div>;
+}
+
+function Message({ message }: { message: ChatMessage }) {
+  const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
+  async function copyMessage() { await navigator.clipboard?.writeText(message.content); setCopied(true); window.setTimeout(() => setCopied(false), 1400); }
+  return <div className={`flex gap-3 ${isUser ? "justify-end" : ""}`}><div className={`grid size-8 shrink-0 place-items-center rounded-md ${isUser ? "order-2 bg-secondary text-secondary-foreground" : "bg-primary text-primary-foreground"}`}>{isUser ? <span className="text-[10px] font-bold">ZK</span> : <Bot size={15} />}</div><div className={`max-w-[min(100%,620px)] ${isUser ? "order-1" : ""}`}><div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] text-muted-foreground"><span>{isUser ? "You" : "Kova AI"}</span><span>·</span><span>{isUser ? "now" : "assistant"}</span></div><div className={`rounded-lg px-4 py-3 text-sm leading-6 ${isUser ? "bg-primary text-primary-foreground" : "border border-border bg-card text-card-foreground"}`}><ReactMarkdown components={{ p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>, strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>, code: ({ children }) => <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs">{children}</code>, ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5">{children}</ul> }}>{message.content || " "}</ReactMarkdown></div>{!isUser && message.content && <div className="mt-2 flex items-center gap-3 font-mono text-[10px] text-muted-foreground"><span className="flex items-center gap-1 text-success"><Check size={11} /> complete</span><button onClick={() => void copyMessage()} className="flex items-center gap-1 hover:text-foreground">{copied ? <Check size={11} /> : <Copy size={11} />}{copied ? "Copied" : "Copy"}</button></div>}</div></div>;
+}
+
+function ProfilePanel({ installPrompt, onInstall }: { installPrompt: BeforeInstallPromptEvent | null; onInstall: () => void }) {
+  return <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 py-10 md:px-10"><div className="w-full max-w-lg"><div className="border-b border-border pb-7"><div className="flex items-center gap-4"><div className="grid size-16 place-items-center rounded-2xl bg-secondary text-xl font-bold text-secondary-foreground">ZK</div><div><h1 className="text-2xl font-semibold tracking-tight">Zaid Khan</h1><p className="mt-1 text-sm text-muted-foreground">Free Kova AI workspace</p></div></div></div><div className="space-y-3 pt-7"><div className="flex items-center justify-between border-b border-border py-3 text-sm"><span className="text-muted-foreground">Plan</span><span className="font-medium">Free</span></div><div className="flex items-center justify-between border-b border-border py-3 text-sm"><span className="text-muted-foreground">Chat access</span><span className="text-success">Available</span></div><div className="flex items-center justify-between border-b border-border py-3 text-sm"><span className="text-muted-foreground">Website builder</span><span className="text-success">Available</span></div></div>{installPrompt && <button onClick={onInstall} className="mt-8 flex w-full items-center justify-center rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110">Install Kova on this device</button>}<p className="mt-5 text-center text-xs leading-5 text-muted-foreground">Kova is free to use. Install support appears when your browser allows adding it to your home screen.</p></div></div>;
+}
