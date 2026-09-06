@@ -1,0 +1,5 @@
+- [ ] Rework chat UI with saved topic chats, new/delete controls, and responsive Lovable-style layout
+- [ ] Add browser upload workflow: 100 MB files, 200 MB video, 20-photo selection, previews and basic edits
+- [ ] Connect attachments to chat requests safely and show clear size/type errors
+- [ ] Add coding workspace with editor, preview, and practical developer assistant mode
+- [ ] Validate build, runtime, upload interactions, and responsive layout
