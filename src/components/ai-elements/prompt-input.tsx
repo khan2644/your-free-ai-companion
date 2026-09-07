@@ -179,7 +179,7 @@ const captureScreenshot = async (): Promise<File | null> => {
 // ============================================================================
 
 export interface AttachmentsContext {
-  files: (FileUIPart & { id: string })[];
+  files: (FileUIPart & { id: string; size?: number })[];
   add: (files: File[] | FileList) => void;
   remove: (id: string) => void;
   clear: () => void;
@@ -273,6 +273,7 @@ export const PromptInputProvider = ({
         filename: file.name,
         id: nanoid(),
         mediaType: file.type,
+        size: file.size,
         type: "file" as const,
         url: URL.createObjectURL(file),
       })),
@@ -501,8 +502,9 @@ export type PromptInputProps = Omit<
   maxFiles?: number;
   // bytes
   maxFileSize?: number;
+  validateFile?: (file: File) => string | null;
   onError?: (err: {
-    code: "max_files" | "max_file_size" | "accept";
+    code: "max_files" | "max_file_size" | "accept" | "file_validation";
     message: string;
   }) => void;
   onSubmit: (
@@ -519,6 +521,7 @@ export const PromptInput = ({
   syncHiddenInput,
   maxFiles,
   maxFileSize,
+  validateFile,
   onError,
   onSubmit,
   children,
@@ -597,14 +600,23 @@ export const PromptInput = ({
         return;
       }
 
+      const invalid = sized.find((file) => validateFile?.(file));
+      if (invalid) {
+        onError?.({
+          code: "file_validation",
+          message: validateFile?.(invalid) ?? "This file cannot be added.",
+        });
+      }
+      const valid = sized.filter((file) => !validateFile?.(file));
+
       setItems((prev) => {
         const capacity =
           typeof maxFiles === "number"
             ? Math.max(0, maxFiles - prev.length)
             : undefined;
         const capped =
-          typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === "number" && sized.length > capacity) {
+          typeof capacity === "number" ? valid.slice(0, capacity) : valid;
+        if (typeof capacity === "number" && valid.length > capacity) {
           onError?.({
             code: "max_files",
             message: "Too many files. Some were not added.",
@@ -616,6 +628,7 @@ export const PromptInput = ({
             filename: file.name,
             id: nanoid(),
             mediaType: file.type,
+            size: file.size,
             type: "file",
             url: URL.createObjectURL(file),
           });
@@ -623,7 +636,7 @@ export const PromptInput = ({
         return [...prev, ...next];
       });
     },
-    [matchesAccept, maxFiles, maxFileSize, onError]
+    [matchesAccept, maxFiles, maxFileSize, onError, validateFile]
   );
 
   const removeLocal = useCallback(
@@ -661,14 +674,22 @@ export const PromptInput = ({
         return;
       }
 
+      const invalid = sized.find((file) => validateFile?.(file));
+      if (invalid) {
+        onError?.({
+          code: "file_validation",
+          message: validateFile?.(invalid) ?? "This file cannot be added.",
+        });
+      }
+      const valid = sized.filter((file) => !validateFile?.(file));
       const currentCount = files.length;
       const capacity =
         typeof maxFiles === "number"
           ? Math.max(0, maxFiles - currentCount)
           : undefined;
       const capped =
-        typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-      if (typeof capacity === "number" && sized.length > capacity) {
+        typeof capacity === "number" ? valid.slice(0, capacity) : valid;
+      if (typeof capacity === "number" && valid.length > capacity) {
         onError?.({
           code: "max_files",
           message: "Too many files. Some were not added.",
@@ -679,7 +700,7 @@ export const PromptInput = ({
         controller?.attachments.add(capped);
       }
     },
-    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller]
+    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller, validateFile]
   );
 
   const clearAttachments = useCallback(
@@ -860,20 +881,16 @@ export const PromptInput = ({
       }
 
       try {
-        // Convert blob URLs to data URLs asynchronously
-        const convertedFiles: FileUIPart[] = await Promise.all(
-          files.map(async ({ id: _id, ...item }) => {
-            if (item.url?.startsWith("blob:")) {
-              const dataUrl = await convertBlobUrlToDataUrl(item.url);
-              // If conversion failed, keep the original blob URL
-              return {
-                ...item,
-                url: dataUrl ?? item.url,
-              };
-            }
-            return item;
-          })
-        );
+      // Keep large local files as blob references when the caller only needs metadata.
+      const convertedFiles: FileUIPart[] = await Promise.all(
+        files.map(async ({ id: _id, ...item }) => {
+          if (props.convertFiles !== false && item.url?.startsWith("blob:")) {
+            const dataUrl = await convertBlobUrlToDataUrl(item.url);
+            return { ...item, url: dataUrl ?? item.url };
+          }
+          return item;
+        })
+      );
 
         const result = onSubmit({ files: convertedFiles, text }, event);
 
