@@ -255,7 +255,7 @@ export const PromptInputProvider = ({
 
   // ----- attachments state (global when wrapped)
   const [attachmentFiles, setAttachmentFiles] = useState<
-    (FileUIPart & { id: string })[]
+    (FileUIPart & { id: string; size?: number })[]
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // oxlint-disable-next-line eslint(no-empty-function)
@@ -503,6 +503,7 @@ export type PromptInputProps = Omit<
   // bytes
   maxFileSize?: number;
   validateFile?: (file: File) => string | null;
+  convertFiles?: boolean;
   onError?: (err: {
     code: "max_files" | "max_file_size" | "accept" | "file_validation";
     message: string;
