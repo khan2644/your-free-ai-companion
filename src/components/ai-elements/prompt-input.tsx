@@ -625,7 +625,7 @@ export const PromptInput = ({
             message: "Too many files. Some were not added.",
           });
         }
-        const next: (FileUIPart & { id: string })[] = [];
+        const next: (FileUIPart & { id: string; size?: number })[] = [];
         for (const file of capped) {
           next.push({
             filename: file.name,
