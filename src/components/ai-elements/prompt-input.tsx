@@ -523,6 +523,7 @@ export const PromptInput = ({
   maxFiles,
   maxFileSize,
   validateFile,
+  convertFiles,
   onError,
   onSubmit,
   children,
@@ -887,7 +888,7 @@ export const PromptInput = ({
       // Keep large local files as blob references when the caller only needs metadata.
       const convertedFiles: FileUIPart[] = await Promise.all(
         files.map(async ({ id: _id, ...item }) => {
-          if (props.convertFiles !== false && item.url?.startsWith("blob:")) {
+          if (convertFiles !== false && item.url?.startsWith("blob:")) {
             const dataUrl = await convertBlobUrlToDataUrl(item.url);
             return { ...item, url: dataUrl ?? item.url };
           }

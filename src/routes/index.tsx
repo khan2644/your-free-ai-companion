@@ -40,6 +40,7 @@ import {
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 export type Section = "chat" | "build" | "profile";
@@ -153,6 +154,7 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
   }
 
   return (
+    <TooltipProvider>
     <main className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
         <aside className={`${mobileMenu ? "flex" : "hidden"} fixed inset-y-0 left-0 z-50 w-80 flex-col border-r border-sidebar-border bg-sidebar p-4 shadow-2xl md:relative md:flex md:w-[270px] md:shadow-none`}>
@@ -185,6 +187,7 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
       </div>
       {mobileMenu && <button className="fixed inset-0 z-40 bg-background/70 md:hidden" onClick={() => setMobileMenu(false)} aria-label="Close navigation overlay" />}
     </main>
+    </TooltipProvider>
   );
 }
 
