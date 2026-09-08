@@ -229,7 +229,7 @@ function Composer({ onSubmit, isStreaming, inputRef }: { onSubmit: (text: string
 
 function ComposerUploadButton() {
   const attachments = usePromptInputAttachments();
-  return <PromptInputButton tooltip="Upload files" onClick={() => attachments.openFileDialog()}><Paperclip /></PromptInputButton>;
+  return <PromptInputButton aria-label="Upload files" tooltip="Upload files" onClick={() => attachments.openFileDialog()}><Paperclip /></PromptInputButton>;
 }
 
 function BuildWorkspace({ code, setCode, previewOpen, setPreviewOpen }: { code: string; setCode: (value: string) => void; previewOpen: boolean; setPreviewOpen: (value: boolean) => void }) {
