@@ -484,7 +484,7 @@ export const PromptInputActionAddScreenshot = ({
 
 export interface PromptInputMessage {
   text: string;
-  files: FileUIPart[];
+  files: (FileUIPart & { size?: number })[];
 }
 
 export type PromptInputProps = Omit<
@@ -523,6 +523,7 @@ export const PromptInput = ({
   maxFiles,
   maxFileSize,
   validateFile,
+  convertFiles,
   onError,
   onSubmit,
   children,
@@ -537,7 +538,9 @@ export const PromptInput = ({
   const formRef = useRef<HTMLFormElement | null>(null);
 
   // ----- Local attachments (only used when no provider)
-  const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const [items, setItems] = useState<
+    (FileUIPart & { id: string; size?: number })[]
+  >([]);
   const files = usingProvider ? controller.attachments.files : items;
 
   // ----- Local referenced sources (always local to PromptInput)
@@ -623,7 +626,7 @@ export const PromptInput = ({
             message: "Too many files. Some were not added.",
           });
         }
-        const next: (FileUIPart & { id: string })[] = [];
+        const next: (FileUIPart & { id: string; size?: number })[] = [];
         for (const file of capped) {
           next.push({
             filename: file.name,
@@ -885,7 +888,7 @@ export const PromptInput = ({
       // Keep large local files as blob references when the caller only needs metadata.
       const convertedFiles: FileUIPart[] = await Promise.all(
         files.map(async ({ id: _id, ...item }) => {
-          if (props.convertFiles !== false && item.url?.startsWith("blob:")) {
+          if (convertFiles !== false && item.url?.startsWith("blob:")) {
             const dataUrl = await convertBlobUrlToDataUrl(item.url);
             return { ...item, url: dataUrl ?? item.url };
           }

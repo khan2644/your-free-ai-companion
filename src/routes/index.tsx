@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   ArrowUp,
@@ -19,7 +19,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
   Conversation,
@@ -40,6 +40,7 @@ import {
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 export type Section = "chat" | "build" | "profile";
@@ -97,7 +98,6 @@ export const Route = createFileRoute("/")({
 });
 
 export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string }) {
-  const navigate = useNavigate();
   const [threads, setThreads] = useState<ChatThread[]>(() => loadThreads());
   const [activeThreadId, setActiveThreadId] = useState(initialThreadId ?? "");
   const [section, setSection] = useState<Section>("chat");
@@ -115,8 +115,10 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
       }
       return;
     }
+    const firstThread = threads[0];
+    if (!firstThread) return;
     const wanted = initialThreadId ?? activeThreadId;
-    const nextId = threads.some((thread) => thread.id === wanted) ? wanted : threads[0].id;
+    const nextId = threads.some((thread) => thread.id === wanted) ? wanted : firstThread.id;
     if (nextId !== activeThreadId) setActiveThreadId(nextId);
   }, [activeThreadId, initialThreadId, threads]);
 
@@ -129,7 +131,6 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
 
   function selectThread(id: string) {
     setActiveThreadId(id);
-    void navigate({ to: "/chat/$threadId", params: { threadId: id } });
     setSection("chat");
     setMobileMenu(false);
   }
@@ -138,7 +139,6 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
     const thread = createThread();
     setThreads((current) => [thread, ...current]);
     setActiveThreadId(thread.id);
-    void navigate({ to: "/chat/$threadId", params: { threadId: thread.id } });
     setSection("chat");
     setMobileMenu(false);
   }
@@ -147,7 +147,6 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
     const thread = createThread();
     setThreads([thread]);
     setActiveThreadId(thread.id);
-    void navigate({ to: "/chat/$threadId", params: { threadId: thread.id } });
   }
 
   function updateThread(update: (thread: ChatThread) => ChatThread) {
@@ -155,6 +154,7 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
   }
 
   return (
+    <TooltipProvider>
     <main className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
         <aside className={`${mobileMenu ? "flex" : "hidden"} fixed inset-y-0 left-0 z-50 w-80 flex-col border-r border-sidebar-border bg-sidebar p-4 shadow-2xl md:relative md:flex md:w-[270px] md:shadow-none`}>
@@ -187,6 +187,7 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
       </div>
       {mobileMenu && <button className="fixed inset-0 z-40 bg-background/70 md:hidden" onClick={() => setMobileMenu(false)} aria-label="Close navigation overlay" />}
     </main>
+    </TooltipProvider>
   );
 }
 
@@ -221,11 +222,14 @@ function ChatWorkspace({ thread, onUpdate }: { thread: ChatThread | undefined; o
 }
 
 function Composer({ onSubmit, isStreaming, inputRef }: { onSubmit: (text: string, files: AttachmentMeta[]) => Promise<void>; isStreaming: boolean; inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
-  const attachments = usePromptInputAttachments();
   const [uploadError, setUploadError] = useState("");
-  const photoCount = attachments.files.filter((file) => file.mediaType?.startsWith("image/")).length;
   function validateFile(file: File) { if (file.type.startsWith("video/") && file.size > VIDEO_LIMIT) return "Videos must be 200 MB or smaller."; if (!file.type.startsWith("video/") && file.size > FILE_LIMIT) return "Files must be 100 MB or smaller."; return null; }
-  return <div className="border-t border-border bg-card/70 p-4 md:px-10 md:py-5"><div className="mx-auto max-w-3xl"><PromptInput accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.js,.jsx,.ts,.tsx,.html,.css,.json" multiple maxFiles={20} validateFile={validateFile} convertFiles={false} onError={({ message }) => setUploadError(message)} onSubmit={async ({ text, files }) => { if (photoCount > PHOTO_LIMIT) { setUploadError("You can add up to 20 photos in one message."); return; } await onSubmit(text, files.map((file) => ({ name: file.filename ?? "attachment", type: file.mediaType ?? "application/octet-stream", size: file.size ?? 0 }))); }}><PromptInputTextarea ref={inputRef} placeholder="Message Kova AI…" /><PromptInputFooter><div className="flex min-w-0 items-center gap-1"><PromptInputButton tooltip="Upload files" onClick={() => attachments.openFileDialog()}><Paperclip /></PromptInputButton><span className="hidden truncate text-[10px] text-muted-foreground sm:inline">100 MB files · 200 MB video · 20 photos</span></div><PromptInputSubmit status={isStreaming ? "submitted" : undefined} disabled={isStreaming} /></PromptInputFooter></PromptInput>{uploadError && <p className="mt-2 text-center text-xs text-destructive">{uploadError}</p>}<p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">Shift + Enter for a new line · files stay on this device</p></div></div>;
+  return <div className="border-t border-border bg-card/70 p-4 md:px-10 md:py-5"><div className="mx-auto max-w-3xl"><PromptInput accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.js,.jsx,.ts,.tsx,.html,.css,.json" multiple maxFiles={20} validateFile={validateFile} convertFiles={false} onError={({ message }) => setUploadError(message)} onSubmit={async ({ text, files }) => { const photoCount = files.filter((file) => file.mediaType?.startsWith("image/")).length; if (photoCount > PHOTO_LIMIT) { setUploadError("You can add up to 20 photos in one message."); return; } await onSubmit(text, files.map((file) => ({ name: file.filename ?? "attachment", type: file.mediaType ?? "application/octet-stream", size: file.size ?? 0 }))); }}><PromptInputTextarea ref={inputRef} placeholder="Message Kova AI…" /><PromptInputFooter><ComposerUploadButton /><span className="hidden min-w-0 flex-1 truncate text-[10px] text-muted-foreground sm:inline">100 MB files · 200 MB video · 20 photos</span><PromptInputSubmit {...(isStreaming ? { status: "submitted" as const } : {})} disabled={isStreaming} /></PromptInputFooter></PromptInput>{uploadError && <p className="mt-2 text-center text-xs text-destructive">{uploadError}</p>}<p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">Shift + Enter for a new line · files stay on this device</p></div></div>;
+}
+
+function ComposerUploadButton() {
+  const attachments = usePromptInputAttachments();
+  return <PromptInputButton aria-label="Upload files" tooltip="Upload files" onClick={() => attachments.openFileDialog()}><Paperclip /></PromptInputButton>;
 }
 
 function BuildWorkspace({ code, setCode, previewOpen, setPreviewOpen }: { code: string; setCode: (value: string) => void; previewOpen: boolean; setPreviewOpen: (value: boolean) => void }) {
