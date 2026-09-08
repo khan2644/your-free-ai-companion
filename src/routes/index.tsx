@@ -11,6 +11,7 @@ import {
   ImagePlus,
   LayoutTemplate,
   Menu,
+  Smartphone,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
@@ -41,9 +42,10 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ApkToolkit } from "@/components/apk-toolkit";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
-export type Section = "chat" | "build" | "profile";
+export type Section = "chat" | "build" | "apk" | "profile";
 type AttachmentMeta = { name: string; type: string; size: number };
 type ChatThread = {
   id: string;
@@ -169,6 +171,7 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
           <nav className="mt-6 space-y-1" aria-label="Main menu">
             <NavItem active={section === "chat"} icon={<MessageSquare />} label="Chat" onClick={() => { setSection("chat"); setMobileMenu(false); }} />
             <NavItem active={section === "build"} icon={<LayoutTemplate />} label="Build a website" onClick={() => { setSection("build"); setMobileMenu(false); }} />
+            <NavItem active={section === "apk"} icon={<Smartphone />} label="APK toolkit" onClick={() => { setSection("apk"); setMobileMenu(false); }} />
           </nav>
           <div className="mt-7 flex items-center justify-between px-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground"><span>Recent chats</span><button onClick={deleteAllChats} aria-label="Delete all chats" title="Delete all chats" className="rounded p-1 hover:bg-sidebar-accent hover:text-destructive"><Trash2 size={13} /></button></div>
           <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">
@@ -179,10 +182,10 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
 
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:px-7">
-            <div className="flex min-w-0 items-center gap-3"><Button className="md:hidden" onClick={() => setMobileMenu(true)} aria-label="Open menu" size="icon" variant="ghost"><Menu /></Button><div className="min-w-0"><div className="truncate text-sm font-semibold">{section === "build" ? "Build a website" : section === "profile" ? "Profile" : activeThread?.title ?? "New chat"}</div><div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground"><span className="live-pulse size-1.5 rounded-full bg-success" /> Ready</div></div></div>
+            <div className="flex min-w-0 items-center gap-3"><Button className="md:hidden" onClick={() => setMobileMenu(true)} aria-label="Open menu" size="icon" variant="ghost"><Menu /></Button><div className="min-w-0"><div className="truncate text-sm font-semibold">{section === "build" ? "Build a website" : section === "apk" ? "APK build & signing" : section === "profile" ? "Profile" : activeThread?.title ?? "New chat"}</div><div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground"><span className="live-pulse size-1.5 rounded-full bg-success" /> Ready</div></div></div>
             <div className="flex items-center gap-2"><span className="hidden rounded-md border border-border px-2.5 py-1.5 font-mono text-[10px] text-muted-foreground sm:inline">FREE</span><Button aria-label="More options" size="icon" variant="ghost"><MoreHorizontal /></Button></div>
           </header>
-          {section === "profile" ? <ProfilePanel /> : section === "build" ? <BuildWorkspace code={code} setCode={setCode} previewOpen={previewOpen} setPreviewOpen={setPreviewOpen} /> : <ChatWorkspace thread={activeThread} onUpdate={updateThread} />}
+          {section === "profile" ? <ProfilePanel /> : section === "apk" ? <ApkToolkit /> : section === "build" ? <BuildWorkspace code={code} setCode={setCode} previewOpen={previewOpen} setPreviewOpen={setPreviewOpen} /> : <ChatWorkspace thread={activeThread} onUpdate={updateThread} />}
         </section>
       </div>
       {mobileMenu && <button className="fixed inset-0 z-40 bg-background/70 md:hidden" onClick={() => setMobileMenu(false)} aria-label="Close navigation overlay" />}
