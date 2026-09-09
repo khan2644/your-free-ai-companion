@@ -109,12 +109,7 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
 
   useEffect(() => {
     if (threads.length === 0) {
-      const thread = createThread();
-      setThreads([thread]);
-      setActiveThreadId(initialThreadId ?? thread.id);
-      if (initialThreadId) {
-        setThreads([{ ...thread, id: initialThreadId }]);
-      }
+      if (activeThreadId) setActiveThreadId("");
       return;
     }
     const firstThread = threads[0];
@@ -146,9 +141,18 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
   }
 
   function deleteAllChats() {
-    const thread = createThread();
-    setThreads([thread]);
-    setActiveThreadId(thread.id);
+    setThreads([]);
+    setActiveThreadId("");
+    setSection("chat");
+  }
+
+  function deleteThread(id: string) {
+    const nextThreads = threads.filter((thread) => thread.id !== id);
+    setThreads(nextThreads);
+    if (activeThreadId === id) {
+      setActiveThreadId(nextThreads[0]?.id ?? "");
+    }
+    setSection("chat");
   }
 
   function updateThread(update: (thread: ChatThread) => ChatThread) {
@@ -173,9 +177,9 @@ export function KovaWorkspace({ initialThreadId }: { initialThreadId?: string })
             <NavItem active={section === "build"} icon={<LayoutTemplate />} label="Build a website" onClick={() => { setSection("build"); setMobileMenu(false); }} />
             <NavItem active={section === "apk"} icon={<Smartphone />} label="APK toolkit" onClick={() => { setSection("apk"); setMobileMenu(false); }} />
           </nav>
-          <div className="mt-7 flex items-center justify-between px-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground"><span>Recent chats</span><button onClick={deleteAllChats} aria-label="Delete all chats" title="Delete all chats" className="rounded p-1 hover:bg-sidebar-accent hover:text-destructive"><Trash2 size={13} /></button></div>
+          <div className="mt-7 flex items-center justify-between px-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground"><span>Saved chats</span><button onClick={deleteAllChats} aria-label="Delete all chats" title="Delete all chats" className="rounded p-1 hover:bg-sidebar-accent hover:text-destructive"><Trash2 size={13} /></button></div>
           <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">
-            {threads.map((thread) => <ChatRow key={thread.id} thread={thread} active={thread.id === activeThreadId} onClick={() => selectThread(thread.id)} />)}
+            {threads.length === 0 ? <p className="px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">No saved chats. Select New chat to begin.</p> : threads.map((thread) => <ChatRow key={thread.id} thread={thread} active={thread.id === activeThreadId} onClick={() => selectThread(thread.id)} onDelete={() => deleteThread(thread.id)} />)}
           </div>
           <div className="border-t border-sidebar-border pt-4"><NavItem active={section === "profile"} icon={<UserRound />} label="Profile" onClick={() => { setSection("profile"); setMobileMenu(false); }} /><div className="mt-3 flex items-center gap-2 rounded-md bg-sidebar-accent p-2.5"><div className="grid size-7 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">ZK</div><div><div className="text-xs font-semibold">Zaid Khan</div><div className="text-[10px] text-muted-foreground">Free plan</div></div></div></div>
         </aside>
@@ -227,7 +231,7 @@ function ChatWorkspace({ thread, onUpdate }: { thread: ChatThread | undefined; o
 function Composer({ onSubmit, isStreaming, inputRef }: { onSubmit: (text: string, files: AttachmentMeta[]) => Promise<void>; isStreaming: boolean; inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
   const [uploadError, setUploadError] = useState("");
   function validateFile(file: File) { if (file.type.startsWith("video/") && file.size > VIDEO_LIMIT) return "Videos must be 200 MB or smaller."; if (!file.type.startsWith("video/") && file.size > FILE_LIMIT) return "Files must be 100 MB or smaller."; return null; }
-  return <div className="border-t border-border bg-card/70 p-4 md:px-10 md:py-5"><div className="mx-auto max-w-3xl"><PromptInput accept="image/*,video/*,audio/*,.pdf,.txt,.md,.doc,.docx,.js,.jsx,.ts,.tsx,.html,.css,.json" multiple maxFiles={20} validateFile={validateFile} convertFiles={false} onError={({ message }) => setUploadError(message)} onSubmit={async ({ text, files }) => { const photoCount = files.filter((file) => file.mediaType?.startsWith("image/")).length; if (photoCount > PHOTO_LIMIT) { setUploadError("You can add up to 20 photos in one message."); return; } await onSubmit(text, files.map((file) => ({ name: file.filename ?? "attachment", type: file.mediaType ?? "application/octet-stream", size: file.size ?? 0 }))); }}><PromptInputTextarea ref={inputRef} placeholder="Message Kova AI…" /><PromptInputFooter><ComposerUploadButton /><span className="hidden min-w-0 flex-1 truncate text-[10px] text-muted-foreground sm:inline">100 MB files · 200 MB video · 20 photos</span><PromptInputSubmit {...(isStreaming ? { status: "submitted" as const } : {})} disabled={isStreaming} /></PromptInputFooter></PromptInput>{uploadError && <p className="mt-2 text-center text-xs text-destructive">{uploadError}</p>}<p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">Shift + Enter for a new line · files stay on this device</p></div></div>;
+  return <div className="border-t border-border bg-card/70 p-4 md:px-10 md:py-5"><div className="mx-auto max-w-3xl"><PromptInput multiple validateFile={validateFile} convertFiles={false} onError={({ message }) => setUploadError(message)} onSubmit={async ({ text, files }) => { const photoCount = files.filter((file) => file.mediaType?.startsWith("image/")).length; if (photoCount > PHOTO_LIMIT) { setUploadError("You can add up to 20 photos in one message."); return; } await onSubmit(text, files.map((file) => ({ name: file.filename ?? "attachment", type: file.mediaType ?? "application/octet-stream", size: file.size ?? 0 }))); }}><PromptInputTextarea ref={inputRef} placeholder="Message Kova AI…" /><PromptInputFooter><ComposerUploadButton /><span className="hidden min-w-0 flex-1 truncate text-[10px] text-muted-foreground sm:inline">All file types · 100 MB files · 200 MB video · 20 photos</span><PromptInputSubmit {...(isStreaming ? { status: "submitted" as const } : {})} disabled={isStreaming} /></PromptInputFooter></PromptInput>{uploadError && <p className="mt-2 text-center text-xs text-destructive">{uploadError}</p>}<p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">APK, documents, code, audio, photos, and video are supported · files stay on this device</p></div></div>;
 }
 
 function ComposerUploadButton() {
@@ -239,7 +243,7 @@ function BuildWorkspace({ code, setCode, previewOpen, setPreviewOpen }: { code: 
   return <div className="flex min-h-0 flex-1 flex-col"><div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-7"><div><h1 className="text-sm font-semibold">Studio</h1><p className="text-xs text-muted-foreground">Edit code and see changes instantly.</p></div><Button variant="outline" size="sm" onClick={() => setPreviewOpen(!previewOpen)}>{previewOpen ? "Hide preview" : "Show preview"}</Button></div><div className={`grid min-h-0 flex-1 ${previewOpen ? "lg:grid-cols-2" : "grid-cols-1"}`}><div className="flex min-h-[420px] flex-col border-b border-border lg:border-b-0 lg:border-r"><div className="flex items-center gap-2 border-b border-border px-4 py-2 font-mono text-[10px] text-muted-foreground"><FileCode2 size={14} /> index.html</div><textarea value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} className="min-h-0 flex-1 resize-none bg-background p-4 font-mono text-xs leading-6 text-foreground outline-none" aria-label="Website code editor" /></div>{previewOpen && <div className="flex min-h-[420px] flex-col bg-muted/20"><div className="flex items-center gap-2 border-b border-border px-4 py-2 font-mono text-[10px] text-muted-foreground"><LayoutTemplate size={14} /> live preview</div><iframe title="Live website preview" srcDoc={code} sandbox="allow-scripts" className="min-h-0 flex-1 bg-white" /></div>}</div></div>;
 }
 
-function ChatRow({ thread, active, onClick }: { thread: ChatThread; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"}`}><MessageSquare size={14} className={active ? "text-primary" : "shrink-0"} /><span className="min-w-0 flex-1 truncate">{thread.title}</span><span className="hidden font-mono text-[9px] group-hover:inline">{thread.messages.length}</span></button>; }
+function ChatRow({ thread, active, onClick, onDelete }: { thread: ChatThread; active: boolean; onClick: () => void; onDelete: () => void }) { return <div className={`group flex w-full items-center gap-1 rounded-md text-xs transition ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"}`}><button onClick={onClick} className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"><MessageSquare size={14} className={active ? "text-primary" : "shrink-0"} /><span className="min-w-0 flex-1 truncate">{thread.title}</span><span className="hidden font-mono text-[9px] group-hover:inline">{thread.messages.length}</span></button><button onClick={onDelete} aria-label={`Delete ${thread.title}`} title="Delete chat" className="mr-1 rounded p-1.5 opacity-0 transition hover:text-destructive group-hover:opacity-100"><Trash2 size={12} /></button></div>; }
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) { return <button onClick={onClick} className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-left text-sm transition ${active ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"}`}><span className={active ? "text-primary" : ""}>{icon}</span>{label}</button>; }
 function ProfilePanel() { return <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 py-10 md:px-10"><div className="w-full max-w-lg"><div className="flex items-center gap-4 border-b border-border pb-7"><div className="grid size-16 place-items-center rounded-2xl bg-secondary text-xl font-bold text-secondary-foreground">ZK</div><div><h1 className="text-2xl font-semibold">Zaid Khan</h1><p className="mt-1 text-sm text-muted-foreground">Free Kova AI workspace</p></div></div><div className="space-y-3 pt-7"><div className="flex items-center justify-between border-b border-border py-3 text-sm"><span className="text-muted-foreground">Chat access</span><span className="text-success">Available</span></div><div className="flex items-center justify-between border-b border-border py-3 text-sm"><span className="text-muted-foreground">Website studio</span><span className="text-success">Available</span></div><div className="flex items-center justify-between border-b border-border py-3 text-sm"><span className="text-muted-foreground">Local chat history</span><span className="text-success">On</span></div></div></div></div>; }
 function createThread(): ChatThread { return { id: crypto.randomUUID(), title: "New chat", updatedAt: Date.now(), messages: [], attachments: [] }; }
